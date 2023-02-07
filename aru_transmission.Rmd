@@ -15,6 +15,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, message = FALSE}
 library(here)
 library(tidyverse)
+library(lme4)
+library(betareg)
 ```
 
 
@@ -35,11 +37,14 @@ data
 
 ```{r}
 # filter out non-necessary data and standardize the object type.
+# change the direction, as E & W should be marked as Side
 data_clean <- data %>%
   filter(distance != 0) %>%
   mutate(beaufort = as_factor(beaufort),
          distance = as_factor(distance),
-         song_exp = as_factor(song_exp)) 
+         song_exp = as_factor(song_exp)) %>% 
+  mutate(direction = if_else(direction == "E" | direction == "W", "Side", direction)) %>%
+  mutate(confidence = if_else(confidence == 0, 0.00000001, confidence))
 data_clean
 ```
 
@@ -47,7 +52,11 @@ data_clean
 
 ## Data visualization
 
-Email from Ken: I was simply trying to run a boxplot to look at the data with the three distances (50, 75 & 100) on the X axes, and Detection Confidence on the Y axes, with the Forest, Control and Partial Cut treatments as separate boxes.  I was then trying to insert a line on top of each so I could see how confidence decreased with distance, and also be able to see how the forest treatment affected overall confidence at each distance.  The second ggplot was the closest I could come to what I was trying to achieve, but it is a really weird way to have to get the visual!   Maybe distance has to be a factor for this to work instead of an integer?  Just not sure that would have the X axes spread out in a proper linear fashion. 
+#### Email from Ken: 
+I was simply trying to run a boxplot to look at the data with the three distances (50, 75 & 100) on the X axes, and Detection Confidence on the Y axes, with the Forest, Control and Partial Cut treatments as separate boxes.  I was then trying to insert a line on top of each so I could see how confidence decreased with distance, and also be able to see how the forest treatment affected overall confidence at each distance.  The second ggplot was the closest I could come to what I was trying to achieve, but it is a really weird way to have to get the visual!   Maybe distance has to be a factor for this to work instead of an integer?  Just not sure that would have the X axes spread out in a proper linear fashion. 
+
+#### Reply: 
+The variable "distance" has to be either character or factor when making the boxplot as it will give the ggplot the hint about how to put the data on the x-axis. However, you will need to transfer the "distance" back to numeric just for plotting out the regression line between the confidence median versus distance. 
 
 ```{r, warning = FALSE, message = FALSE}
 data_clean_med <- data_clean %>% 
@@ -73,6 +82,44 @@ aru_distance
 
 ## Model formulation
 
+#### Email from Ken: 
+The second part is running the model.  I tried a general linear mixed effect with comparing distance, direction, habitat (plot_type) and age of ARU against detection confidence, while controlling for windspeed during playback (beaufort) and replicate song types (song_exp).  However, the data is really skewed, so I am not convinced that the lmer is the right model.  I thought maybe a generalized linear model, but then not sure which family this would be (binomial?).   In any case, distance, habitat and direction are all coming out as influential, and it looks like the interaction between distance and habitat is also important.  
+
+#### Reply: 
+As mentioned in your text, "song_exp" is the replicates, so that we don't put it in the model. As suggested in this [online discussion](https://www.researchgate.net/post/Which-type-of-regression-would-be-appropriate-when-the-dependent-variable-is-continuous-and-bounded-between-0-and-1), a beta regression might be a good fit in the case when y variable ranges from 0 to 1. 
+
+> The class of beta regression models, as introduced by Ferrari and Cribari-Neto (2004), is useful for modeling continuous variables y that assume values in the open standard unit interval (0, 1).
+
+Then I would test out each of the factor one by one, then gradually add significant variables, then test the interactions. Here are some documents to help understanding Beta analysis in R:
+
+- [Beta Regression in R](https://cran.r-project.org/web/packages/betareg/vignettes/betareg.pdf)
+- [Extended beta regression in R: shaken, stirred, mixed, and partitioned](https://ro.uow.edu.au/buspapers/158/)
+
+```{r}
+# test out each individual factor that might influence the confidence
+
+## Factors
+# ARU (2): NEW, OLD
+# plot_type (3): F, C, P
+# direction (3): Side, N, S
+# distance (3): 50, 75, 100
+
+## Replicates
+# song_exp (7)
+
+
+# here are the examples of fitting beta regression using single variable.
+# I will need to study more about beta regression but the result interpretation
+# is very similar to the linear model, where you look for significance value to 
+# see whether the variable is contributing to the model.
+conf_ARU <- betareg(confidence ~ ARU , data = data_clean) 
+summary(conf_ARU)
+
+conf_ARU <- betareg(confidence ~ ARU , data = data_clean) 
+summary(conf_ARU)
+
+
+```
 
 
 
